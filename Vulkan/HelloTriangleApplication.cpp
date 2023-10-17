@@ -17,20 +17,131 @@ const bool enableValidationLayers = false;
 const bool enableValidationLayers = true;
 #endif
 
-class HelloTriangleApplication {
-public :
-    GLFWwindow* window;
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pCallback)
+{
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != nullptr)
+    {
+        return func(instance, pCreateInfo, pAllocator, pCallback);
+    }
+    else
+    {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
 
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT callback, const VkAllocationCallbacks* pAllocator)
+{
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr)
+    {
+        func(instance, callback, pAllocator);
+    }
+}
+
+class HelloTriangleApplication {
+public:
     void run()
     {
         initWindow();
         initVulkan();
         mainLoop();
-        //cleanup();
+        cleanup();
     }
 
-private :
+private:
+    GLFWwindow* window;
     VkInstance instance;
+    VkDebugUtilsMessengerEXT debugMessenger;
+
+    void initWindow()
+    {
+        glfwInit();
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    }
+
+    void initVulkan()
+    {
+
+        createInstance();
+        setupDebugMessenger();
+    }
+
+    void mainLoop()
+    {
+        while (!glfwWindowShouldClose(window))
+        {
+            glfwPollEvents();
+        }
+    }
+
+    void cleanup()
+    {
+        if (enableValidationLayers)
+        {
+            DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+        }
+
+        vkDestroyInstance(instance, nullptr);
+        glfwDestroyWindow(window);
+        glfwTerminate();
+    }
+
+    void createInstance()
+    {
+        if (enableValidationLayers && !checkValidationLayerSupport())
+        {
+            throw std::runtime_error("validation_layers_requested,_but_not_available!");
+        }
+
+        VkApplicationInfo appInfo = {};
+        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+        appInfo.pApplicationName = "Hellp_Triangle";
+        appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+        appInfo.pEngineName = "No_Engine";
+        appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+        appInfo.apiVersion = VK_API_VERSION_1_0;
+
+        VkInstanceCreateInfo createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        createInfo.pApplicationInfo = &appInfo;
+
+        auto extensions = getRequiredExtensions();
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+        createInfo.ppEnabledExtensionNames = extensions.data();
+
+        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+        if (enableValidationLayers)
+        {
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            createInfo.ppEnabledLayerNames = validationLayers.data();
+
+            populateDebugMessengerCreateInfo(debugCreateInfo);
+            createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+        }
+        else
+        {
+            createInfo.enabledLayerCount = 0;
+            createInfo.pNext = nullptr;
+        }
+
+        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create instance!");
+        }
+    }
+
+    void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+        createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        createInfo.pfnUserCallback = debugCallback;
+    }
 
     bool checkValidationLayerSupport()
     {
@@ -62,89 +173,43 @@ private :
         return true;
     }
 
-    void initWindow()
+    void setupDebugMessenger()
     {
-        glfwInit();
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-    }
-
-    void initVulkan()
-    {
-      
-        createInstance();
-    }
-
-    void createInstance()
-    {
-        if (enableValidationLayers && !checkValidationLayerSupport())
+        if (!enableValidationLayers)return;
+        VkDebugUtilsMessengerCreateInfoEXT createInfo;
+        populateDebugMessengerCreateInfo(createInfo);
+        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
         {
-            throw std::runtime_error("validation_layers_requested,_but_not_available!");
+            throw std::runtime_error("failed to set up debug messenger!");
         }
+    }
 
-        VkApplicationInfo appInfo = {};
-        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "Hellp_Triangle";
-        appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.pEngineName = "No_Engine";
-        appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_0;
-
-        VkInstanceCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pApplicationInfo = &appInfo;
-
+    //设置回调函数
+    std::vector<const char*> getRequiredExtensions()
+    {
         uint32_t glfwExtensionCount = 0;
         const char** glfwExtensions;
         glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-        createInfo.enabledExtensionCount = glfwExtensionCount;
-        createInfo.ppEnabledExtensionNames = glfwExtensions;
+        std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
         if (enableValidationLayers)
         {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-            createInfo.ppEnabledExtensionNames = validationLayers.data();
-        }
-        else 
-        {
-            createInfo.enabledLayerCount = 0;
+            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
 
-#pragma region LogExtensions
-        uint32_t extensionCount = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-        std::vector<VkExtensionProperties> extensions(glfwExtensionCount);
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
-        std::cout << "available_extensions:" << std::endl;
-        for (const auto& ext : extensions)
-        {
-            std::cout << "\t" << ext.extensionName << std::endl;
-        }
-#pragma endregion
-
-
-        VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
-        if (result != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed_to_create_instance!");
-        }
+        return extensions;
     }
 
-    void mainLoop()
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+        VkDebugUtilsMessageTypeFlagsEXT messageType,
+        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+        void* pUserData)
     {
-        while (!glfwWindowShouldClose(window))
-        {
-            glfwPollEvents();
-        }
+        std::cerr << "validation_layer:_" << pCallbackData->pMessage << std::endl;
+        return VK_FALSE;
     }
-
-    void cleanup()
-    {
-        vkDestroyInstance(instance, nullptr);
-        glfwDestroyWindow(window);
-        glfwTerminate();
-    }
+    
 };
 
 int main()
